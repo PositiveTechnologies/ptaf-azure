@@ -188,7 +188,7 @@
     "_adminSshKeyPath": "[concat('/home/',parameters('adminUserName'),'/.ssh/authorized_keys')]",
     "_singleQuote": "'",
     "_extensionCommand": "[concat('sh -c ', variables('_singleQuote'), './network_settings.sh ', parameters('deploymentName'), variables('_singleQuote'))]",
-    "_scriptFolder": "scripts",
+    "_scriptFolder": "/scripts",
     "_scriptFileName": "network_settings.sh",
     "_scriptPath": "[concat(variables('_scriptFolder'), '/', variables('_scriptFileName'))]",
     "_scriptUri": "[uri(deployment().properties.templateLink.uri, variables('_scriptPath'))]",
