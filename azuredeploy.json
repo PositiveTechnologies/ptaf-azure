@@ -1,0 +1,603 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "virtualMachineName": {
+      "type": "string",
+      "defaultValue": "[concat('ptaf','-',uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "/REQUIRED/ The prefix for the name of Virtual Machine."
+      }
+    },
+    "hostname": {
+      "type": "string",
+      "defaultValue": "[concat('ptaf','-',uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "/REQUIRED/ The hostname of PTAF, will be registered in DNS"
+      }
+    },
+    "virtualMachineSize": {
+      "type": "string",
+      "defaultValue": "Standard_F4",
+      "metadata": {
+        "description": "/REQUIRED/ VM instance size"
+      },
+      "allowedValues": [
+        "Standard_F4",
+        "Standard_F8",
+        "Standard_F16",
+        "Standard_A3",
+        "Standard_A4",
+        "Standard_A6",
+        "Standard_A7",
+        "Standard_D3_v2",
+        "Standard_D4_v2"
+      ]
+    },
+    "createNewStorageAccountOrUseExistingOne": {
+      "type": "string",
+      "allowedValues": [
+        "new",
+        "existing"
+      ],
+      "defaultValue": "new",
+      "metadata": {
+        "description": "Create new Storage Account or use existing one."
+      }
+    },
+    "storageAccountName": {
+      "type": "string",
+      "defaultValue": "[concat('ptafstorage',uniqueString(resourceGroup().id))]",
+      "metadata": {
+        "description": "/REQUIRED/ Storage Account name."
+      }
+    },
+    "storageAccountResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "/REQUIRED/ Resource Group name for existing or created Storage Account."
+      }
+    },
+    "storageAccountType": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS"
+      ],
+      "metadata": {
+        "description": "Type of the Storage Account."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "pt",
+      "metadata": {
+        "description": "/REQUIRED/ Username for SSH access to the VM."
+      }
+    },
+    "authenticationType": {
+      "type": "string",
+      "allowedValues": [
+        "sshpublickey",
+        "password"
+      ],
+      "defaultValue": "password",
+      "metadata": {
+        "description": "Authentication type (key or password)."
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Password for SSH access. /REQUIRED/ if authentication by password has been selected. Must be at least 14 characters long and contains at least 1 upper-case letter, 1 lower-case letter, 1 digit and 1 nonalphanumeric character."
+      }
+    },
+    "adminSshKey": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "RSA public key for SSH access. /REQUIRED/ if authentication by key has been selected."
+      }
+    },
+    "createNewVirtualNetworkOrUseExistingOne": {
+      "type": "string",
+      "defaultValue": "new",
+      "allowedValues": [ "new", "existing" ],
+      "metadata": {
+        "description": "Create new Virtual Network or use existing one"
+      }
+    },
+    "virtualNetworkResourceGroup": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().name]",
+      "metadata": {
+        "description": "/REQUIRED/ Resource Group name for existing or created Virtual Network"
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('virtualMachineName'),'-','vnet')]",
+      "metadata": {
+        "description": "/REQUIRED/ The name of Virtual Network"
+      }
+    },
+    "virtualNetworkPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.0.0/16",
+      "metadata": {
+        "description": "Network address and netmask for Virtual Network. /REQUIRED/ if creating of new Virtual Network has been selected."
+      }
+    },
+    "lanSubnetName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('virtualMachineName'),'-','subnet-lan')]",
+      "metadata": {
+        "description": "/REQUIRED/ The name of LAN Subnet"
+      }
+    },
+    "lanSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.0.0/24",
+      "metadata": {
+        "description": "Network address and netmask for LAN Subnet. Must be a subnet of Virtual Network prefix. /REQUIRED/ if create the new LAN Subnet."
+      }
+    },
+    "wanSubnetName": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('virtualMachineName'),'-','subnet-wan')]",
+      "metadata": {
+        "description": "/REQUIRED/ The name of WAN Subnet"
+      }
+    },
+    "wanSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.0.1.0/24",
+      "metadata": {
+        "description": "Network address and netmask for WAN Subnet. Must be a subnet of Virtual Network prefix. /REQUIRED/ if create the new WAN Subnet."
+      }
+    }
+  },
+  "variables": {
+    "virtualMachineName": "[parameters('virtualMachineName')]",
+    "hostname": "[parameters('hostname')]",
+    "virtualMachineSize": "[parameters('virtualMachineSize')]",
+    "virtualNetworkResourceGroup": "[parameters('virtualNetworkResourceGroup')]",
+    "virtualNetworkName": "[parameters('virtualNetworkName')]",
+    "virtualNetworkID": "[resourceId(variables('virtualNetworkResourceGroup'),'Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
+    "networkSecurityGroupName": "[concat(variables('virtualMachineName'),'-','nsg')]",
+    "virtualNetworkPrefix": "[parameters('virtualNetworkPrefix')]",
+    "lanSubnetName": "[parameters('lanSubnetName')]",
+    "lanSubnetPrefix": "[parameters('lanSubnetPrefix')]",
+    "lanSubnetRef": "[concat(variables('virtualNetworkID'), '/subnets/', variables('lanSubnetName'))]",
+    "wanSubnetName": "[parameters('wanSubnetName')]",
+    "wanSubnetPrefix": "[parameters('wanSubnetPrefix')]",
+    "wanSubnetRef": "[concat(variables('virtualNetworkID'), '/subnets/', variables('wanSubnetName'))]",
+    "lanNetworkInterfaceName": "[concat(variables('virtualMachineName'),'-','if','-','lan')]",
+    "wanNetworkInterfaceName": "[concat(variables('virtualMachineName'),'-','if','-','wan')]",
+    "publicIPName": "[concat(variables('virtualMachineName'),'-','public','-','ip')]",
+    "storageAccountName": "[parameters('storageAccountName')]",
+    "storageAccountResourceGroup": "[parameters('storageAccountResourceGroup')]",
+    "storageAccountType": "[parameters('storageAccountType')]",
+    "adminUsername": "[parameters('adminUsername')]",
+    "authenticationType": "[parameters('authenticationType')]",
+    "adminPassword": "[parameters('adminPassword')]",
+    "adminSshKey": "[parameters('adminSshKey')]",
+    "_adminSshKeyPath": "[concat('/home/',parameters('adminUserName'),'/.ssh/authorized_keys')]",
+    "_singleQuote": "'",
+    "_extensionCommand": "[concat('sh -c ', variables('_singleQuote'), './network_settings.sh ', parameters('virtualMachineName'), variables('_singleQuote'))]",
+    "_scriptFolder": "scripts",
+    "_scriptFileName": "network_settings.sh",
+    "_scriptPath": "[concat(variables('_scriptFolder'), '/', variables('_scriptFileName'))]",
+    "_scriptUri": "[uri(deployment().properties.templateLink.uri, variables('_scriptPath'))]",
+    "_imagePublisher": "ptsecurity",
+    "_imageSku": "byol",
+    "_imageOffer": "ptaf-vm"
+
+  },
+  "resources": [
+    {
+      "name": "vnetNestedDeployment",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2016-09-01",
+      "dependsOn": [],
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "name": "[variables('virtualNetworkName')]",
+              "type": "Microsoft.Network/virtualNetworks",
+              "location": "[resourceGroup().location]",
+              "apiVersion": "2016-03-30",
+              "condition": "[equals(parameters('createNewVirtualNetworkOrUseExistingOne'), 'new')]",
+              "dependsOn": [],
+              "tags": {
+                "displayName": "[variables('virtualNetworkName')]"
+              },
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "[variables('virtualNetworkPrefix')]"
+                  ]
+                },
+                "subnets": [
+                  {
+                    "name": "[variables('lanSubnetName')]",
+                    "properties": {
+                      "addressPrefix": "[variables('lanSubnetPrefix')]"
+                    }
+                  },
+                  {
+                    "name": "[variables('wanSubnetName')]",
+                    "properties": {
+                      "addressPrefix": "[variables('wanSubnetPrefix')]"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "2015-06-15",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "[variables('networkSecurityGroupName')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "ssh-rule",
+            "properties": {
+              "description": "Allow SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22013",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "ui-rule",
+            "properties": {
+              "description": "Allow UI",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "8443",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 101,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "http-rule",
+            "properties": {
+              "description": "Allow http",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 102,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "https-rule",
+            "properties": {
+              "description": "Allow https",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "Internet",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 103,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "graphite-rule",
+            "properties": {
+              "description": "Allow graphite from virtual network",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "8082",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 105,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('lanNetworkInterfaceName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "vnetNestedDeployment"
+      ],
+      "tags": {
+        "displayName": "[variables('lanNetworkInterfaceName')]"
+      },
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('lanSubnetRef')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('wanNetworkInterfaceName')]",
+      "type": "Microsoft.Network/networkInterfaces",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [
+        "vnetNestedDeployment",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+      ],
+      "tags": {
+        "displayName": "[variables('wanNetworkInterfaceName')]"
+      },
+      "properties": {
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+        },
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[variables('wanSubnetRef')]"
+              },
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIpName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('publicIPName')]",
+      "type": "Microsoft.Network/publicIPAddresses",
+      "location": "[resourceGroup().location]",
+      "apiVersion": "2016-03-30",
+      "dependsOn": [],
+      "tags": {
+        "displayName": "[variables('publicIPName')]"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "dnsSettings": {
+          "domainNameLabel": "[variables('hostname')]"
+        }
+      }
+    },
+    {
+      "name": "storageAccountNestedDeployment",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2016-09-01",
+      "dependsOn": [],
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "name": "[variables('storageAccountName')]",
+              "apiVersion": "2015-06-15",
+              "location": "[resourceGroup().location]",
+              "condition": "[equals(parameters('createNewStorageAccountOrUseExistingOne'), 'new')]",
+              "properties": {
+                "accountType": "[variables('storageAccountType')]"
+              }
+            }
+          ],
+          "outputs": {
+            "storageAccountId": {
+              "value": "[resourceId(variables('storageAccountResourceGroup'), 'Microsoft.Storage/StorageAccounts', variables('storageAccountName'))]",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "vmNestedDeployment",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2016-09-01",
+      "dependsOn": [
+        "storageAccountNestedDeployment",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('wanNetworkInterfaceName'))]",
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('lanNetworkInterfaceName'))]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "variables": {},
+          "resources": [
+            {
+              "apiVersion": "2015-06-15",
+              "type": "Microsoft.Compute/virtualMachines",
+              "name": "[concat(variables('virtualMachineName'), '-', 'vm', '-', 'key')]",
+              "condition": "[equals(variables('authenticationType'), 'sshpublickey')]",
+              "location": "[resourceGroup().location]",
+              "plan": {
+                "name": "[variables('_imageSku')]",
+                "product": "[variables('_imageOffer')]",
+                "publisher": "[variables('_imagePublisher')]"
+              },
+              "properties": {
+                "osProfile": {
+                  "computerName": "[variables('virtualMachineName')]",
+                  "adminUsername": "[variables('adminUsername')]",
+                  "linuxConfiguration": {
+                    "disablePasswordAuthentication": "true",
+                    "ssh": {
+                      "publicKeys": [
+                        {
+                          "path": "[variables('_adminSshKeyPath')]",
+                          "keyData": "[variables('adminSshKey')]"
+                        }
+                      ]
+                    }
+                  }
+                },
+                "hardwareProfile": {
+                  "vmSize": "[variables('virtualMachineSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[variables('_imagePublisher')]",
+                    "offer": "[variables('_imageOffer')]",
+                    "sku": "[variables('_imageSku')]",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "name": "osdisk",
+                    "vhd": {
+                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('virtualMachineName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
+                    },
+                    "createOption": "FromImage"
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('wanNetworkInterfaceName'))]",
+                      "properties": {
+                        "primary": true
+                      }
+                    },
+                    {
+                      "properties": {
+                        "primary": false
+                      },
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('lanNetworkInterfaceName'))]"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "apiVersion": "2015-06-15",
+              "type": "Microsoft.Compute/virtualMachines",
+              "name": "[concat(variables('virtualMachineName'), '-', 'vm', '-', 'pass')]",
+              "condition": "[equals(variables('authenticationType'), 'password')]",
+              "location": "[resourceGroup().location]",
+              "plan": {
+                "name": "[variables('_imageSku')]",
+                "product": "[variables('_imageOffer')]",
+                "publisher": "[variables('_imagePublisher')]"
+              },
+              "properties": {
+                "osProfile": {
+                  "computerName": "[variables('virtualMachineName')]",
+                  "adminUsername": "[variables('adminUsername')]",
+                  "adminPassword": "[variables('adminPassword')]"
+                },
+                "hardwareProfile": {
+                  "vmSize": "[variables('virtualMachineSize')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[variables('_imagePublisher')]",
+                    "offer": "[variables('_imageOffer')]",
+                    "sku": "[variables('_imageSku')]",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "name": "osdisk",
+                    "vhd": {
+                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('virtualMachineName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
+                    },
+                    "createOption": "FromImage"
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('wanNetworkInterfaceName'))]",
+                      "properties": {
+                        "primary": true
+                      }
+                    },
+                    {
+                      "properties": {
+                        "primary": false
+                      },
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('lanNetworkInterfaceName'))]"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "outputs": {}
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "name": "[concat(variables('virtualMachineName'),'/ptafConfig')]",
+      "apiVersion": "2015-06-15",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "vmNestedDeployment"
+      ],
+      "properties": {
+        "publisher": "Microsoft.OSTCExtensions",
+        "type": "CustomScriptForLinux",
+        "typeHandlerVersion": "1.5",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "fileUris": "[variables('_scriptUri')]",
+          "commandToExecute": "[variables('_extensionCommand')]"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "adminUsername": {
+      "type": "string",
+      "value": "[variables('adminUsername')]"
+    }
+  }
+ }
