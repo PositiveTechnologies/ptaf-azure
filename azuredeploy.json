@@ -191,7 +191,7 @@
     "_scriptFolder": "/scripts",
     "_scriptFileName": "network_settings.sh",
     "_scriptPath": "[concat(variables('_scriptFolder'), '/', variables('_scriptFileName'))]",
-    "_scriptUri": "[uri(deployment().properties.templateLink.uri, variables('_scriptPath'))]",
+    "_scriptUri": "https://raw.githubusercontent.com/PositiveTechnologies/ptaf-azure/master/scripts/network_settings.sh",
     "_imagePublisher": "ptsecurity",
     "_imageSku": "byol",
     "_imageOffer": "ptaf-vm"
