@@ -488,7 +488,7 @@
                     "publisher": "[variables('_imagePublisher')]",
                     "offer": "[variables('_imageOffer')]",
                     "sku": "[variables('_imageSku')]",
-                    "version": "latest"
+                    "version": "3.5.2"
                   },
                   "osDisk": {
                     "name": "osdisk",
@@ -541,7 +541,7 @@
                     "publisher": "[variables('_imagePublisher')]",
                     "offer": "[variables('_imageOffer')]",
                     "sku": "[variables('_imageSku')]",
-                    "version": "latest"
+                    "version": "3.5.2"
                   },
                   "osDisk": {
                     "name": "osdisk",
