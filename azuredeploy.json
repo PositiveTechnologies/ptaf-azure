@@ -2,11 +2,11 @@
   "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "virtualMachineName": {
+    "deploymentName": {
       "type": "string",
       "defaultValue": "[concat('ptaf','-',uniqueString(resourceGroup().id))]",
       "metadata": {
-        "description": "/REQUIRED/ The prefix for the name of Virtual Machine."
+        "description": "/REQUIRED/ The prefix for the names of deployed resources."
       }
     },
     "hostname": {
@@ -118,7 +118,7 @@
     },
     "virtualNetworkName": {
       "type": "string",
-      "defaultValue": "[concat(parameters('virtualMachineName'),'-','vnet')]",
+      "defaultValue": "[concat(parameters('deploymentName'),'-','vnet')]",
       "metadata": {
         "description": "/REQUIRED/ The name of Virtual Network"
       }
@@ -132,7 +132,7 @@
     },
     "lanSubnetName": {
       "type": "string",
-      "defaultValue": "[concat(parameters('virtualMachineName'),'-','subnet-lan')]",
+      "defaultValue": "[concat(parameters('deploymentName'),'-','subnet-lan')]",
       "metadata": {
         "description": "/REQUIRED/ The name of LAN Subnet"
       }
@@ -146,7 +146,7 @@
     },
     "wanSubnetName": {
       "type": "string",
-      "defaultValue": "[concat(parameters('virtualMachineName'),'-','subnet-wan')]",
+      "defaultValue": "[concat(parameters('deploymentName'),'-','subnet-wan')]",
       "metadata": {
         "description": "/REQUIRED/ The name of WAN Subnet"
       }
@@ -160,13 +160,14 @@
     }
   },
   "variables": {
-    "virtualMachineName": "[parameters('virtualMachineName')]",
+    "deploymentName": "[parameters('deploymentName')]",
+    "virtualMachineName": "[concat(variables('deploymentName'), '-', 'vm', '-', variables('authenticationType'))]",
     "hostname": "[parameters('hostname')]",
     "virtualMachineSize": "[parameters('virtualMachineSize')]",
     "virtualNetworkResourceGroup": "[parameters('virtualNetworkResourceGroup')]",
     "virtualNetworkName": "[parameters('virtualNetworkName')]",
     "virtualNetworkID": "[resourceId(variables('virtualNetworkResourceGroup'),'Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
-    "networkSecurityGroupName": "[concat(variables('virtualMachineName'),'-','nsg')]",
+    "networkSecurityGroupName": "[concat(variables('deploymentName'),'-','nsg')]",
     "virtualNetworkPrefix": "[parameters('virtualNetworkPrefix')]",
     "lanSubnetName": "[parameters('lanSubnetName')]",
     "lanSubnetPrefix": "[parameters('lanSubnetPrefix')]",
@@ -174,9 +175,9 @@
     "wanSubnetName": "[parameters('wanSubnetName')]",
     "wanSubnetPrefix": "[parameters('wanSubnetPrefix')]",
     "wanSubnetRef": "[concat(variables('virtualNetworkID'), '/subnets/', variables('wanSubnetName'))]",
-    "lanNetworkInterfaceName": "[concat(variables('virtualMachineName'),'-','if','-','lan')]",
-    "wanNetworkInterfaceName": "[concat(variables('virtualMachineName'),'-','if','-','wan')]",
-    "publicIPName": "[concat(variables('virtualMachineName'),'-','public','-','ip')]",
+    "lanNetworkInterfaceName": "[concat(variables('deploymentName'),'-','if','-','lan')]",
+    "wanNetworkInterfaceName": "[concat(variables('deploymentName'),'-','if','-','wan')]",
+    "publicIPName": "[concat(variables('deploymentName'),'-','public','-','ip')]",
     "storageAccountName": "[parameters('storageAccountName')]",
     "storageAccountResourceGroup": "[parameters('storageAccountResourceGroup')]",
     "storageAccountType": "[parameters('storageAccountType')]",
@@ -186,7 +187,7 @@
     "adminSshKey": "[parameters('adminSshKey')]",
     "_adminSshKeyPath": "[concat('/home/',parameters('adminUserName'),'/.ssh/authorized_keys')]",
     "_singleQuote": "'",
-    "_extensionCommand": "[concat('sh -c ', variables('_singleQuote'), './network_settings.sh ', parameters('virtualMachineName'), variables('_singleQuote'))]",
+    "_extensionCommand": "[concat('sh -c ', variables('_singleQuote'), './network_settings.sh ', parameters('deploymentName'), variables('_singleQuote'))]",
     "_scriptFolder": "scripts",
     "_scriptFileName": "network_settings.sh",
     "_scriptPath": "[concat(variables('_scriptFolder'), '/', variables('_scriptFileName'))]",
@@ -194,7 +195,6 @@
     "_imagePublisher": "ptsecurity",
     "_imageSku": "byol",
     "_imageOffer": "ptaf-vm"
-
   },
   "resources": [
     {
@@ -456,7 +456,7 @@
             {
               "apiVersion": "2015-06-15",
               "type": "Microsoft.Compute/virtualMachines",
-              "name": "[concat(variables('virtualMachineName'), '-', 'vm', '-', 'key')]",
+              "name": "[concat(variables('deploymentName'), '-', 'vm', '-', 'sshpublickey')]",
               "condition": "[equals(variables('authenticationType'), 'sshpublickey')]",
               "location": "[resourceGroup().location]",
               "plan": {
@@ -466,7 +466,7 @@
               },
               "properties": {
                 "osProfile": {
-                  "computerName": "[variables('virtualMachineName')]",
+                  "computerName": "[variables('deploymentName')]",
                   "adminUsername": "[variables('adminUsername')]",
                   "linuxConfiguration": {
                     "disablePasswordAuthentication": "true",
@@ -493,7 +493,7 @@
                   "osDisk": {
                     "name": "osdisk",
                     "vhd": {
-                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('virtualMachineName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
+                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('deploymentName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
                     },
                     "createOption": "FromImage"
                   }
@@ -519,7 +519,7 @@
             {
               "apiVersion": "2015-06-15",
               "type": "Microsoft.Compute/virtualMachines",
-              "name": "[concat(variables('virtualMachineName'), '-', 'vm', '-', 'pass')]",
+              "name": "[concat(variables('deploymentName'), '-', 'vm', '-', 'password')]",
               "condition": "[equals(variables('authenticationType'), 'password')]",
               "location": "[resourceGroup().location]",
               "plan": {
@@ -529,7 +529,7 @@
               },
               "properties": {
                 "osProfile": {
-                  "computerName": "[variables('virtualMachineName')]",
+                  "computerName": "[variables('deploymentName')]",
                   "adminUsername": "[variables('adminUsername')]",
                   "adminPassword": "[variables('adminPassword')]"
                 },
@@ -546,7 +546,7 @@
                   "osDisk": {
                     "name": "osdisk",
                     "vhd": {
-                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('virtualMachineName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
+                      "uri": "[concat('https://', variables('storageAccountName'), '.blob.core.windows.net/vhds/', variables('deploymentName'), '-', variables('_imageOffer'), '-', variables('_imageSku'), '.vhd')]"
                     },
                     "createOption": "FromImage"
                   }
