@@ -588,7 +588,7 @@
         "typeHandlerVersion": "1.5",
         "autoUpgradeMinorVersion": true,
         "settings": {
-          "fileUris": "[variables('_scriptUri')]",
+          "fileUris": ["[variables('_scriptUri')]"],
           "commandToExecute": "[variables('_extensionCommand')]"
         }
       }
