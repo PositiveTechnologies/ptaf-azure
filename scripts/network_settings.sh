@@ -32,7 +32,7 @@ EOF
 
 
 if [ -n "${LICENSE}" ]; then
-    STATUS=$(curl -ks -o /dev/null -w '%{http_code}' "https://localhost:8443/license/get_config/?license_token=" )
+    STATUS=$(curl -ks -o /dev/null -w '%{http_code}' "https://localhost:8443/license/get_config/?license_token=${LICENSE}" )
     if [ $STATUS -eq 200 ]; then
         echo "License was updated via Curl"
         break
