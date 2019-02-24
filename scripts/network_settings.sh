@@ -32,7 +32,11 @@ EOF
 
 
 if [ -n "${LICENSE}" ]; then
-    curl -k "https://localhost:8443/license/get_config/?license_token=${LICENSE}" || echo
+    STATUS=$(curl -ks -o /dev/null -w '%{http_code}' "https://localhost:8443/license/get_config/?license_token=" )
+    if [ $STATUS -eq 200 ]; then
+        echo "License was updated via Curl"
+        break
+    fi
 fi
 
 sed -i "s/^    ('en', 'English')/    ('en', 'English'),\n    ('ru', 'Russian'),/g" \
