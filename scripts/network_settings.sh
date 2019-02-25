@@ -39,6 +39,10 @@ if [ -n "${LICENSE}" ]; then
     fi
 fi
 
+while netstat -lnt | awk '$4 ~ /:2812$/ {exit 1}';
+    do sleep 10;
+done
+
 sed -i "s/^    ('en', 'English')/    ('en', 'English'),\n    ('ru', 'Russian'),/g" \
     /opt/waf/conf/static.ui.config
 
