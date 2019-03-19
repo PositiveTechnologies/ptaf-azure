@@ -157,7 +157,7 @@
             }
           },
           {
-            "name": "License",
+            "name": "license",
             "type": "Microsoft.Common.TextBox",
             "label": "PT AF license",
             "defaultValue": "",
