@@ -37,19 +37,18 @@ done
 # One shot Activation
 ########################################################################
 echo "USE_RSA_LOGIN = False" >> /opt/waf/conf/ui.config
-creds=($(cat /opt/waf/conf/azure_specific.conf))
+
 /opt/waf/python/bin/python - <<EOF > /dev/null 2>&1
 from hashlib import md5
 from ui import app
 
 with app.test_request_context():
     client = app.test_client()
-    client.post('/login', data={'login': '${creds[0]}','password': '${creds[1]}','lang': 'en'})
+    client.post('/login', data={'login': 'admin','password': '82082716189f80fd070b89ac716570ba','lang': 'en'})
     client.get("/license/get_config/?license_token=$LICENSE")
 EOF
 
 sed -i '$ d' /opt/waf/conf/ui.config
-rm -f /opt/waf/conf/azure_specific.conf
 sed -i "s/^    ('en', 'English')/    ('en', 'English'),\n    ('ru', 'Russian'),/g" \
     /opt/waf/conf/static.ui.config
 
